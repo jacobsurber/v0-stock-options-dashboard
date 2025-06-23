@@ -3,13 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowDown, ArrowUp, Plus } from "lucide-react"
 import { useBatchMarketData } from "@/hooks/use-market-data"
+import { DataSourceIndicator } from "@/components/data-source-indicator"
 
 // Replace the mock data with this:
 const watchlistSymbols = ["AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"]
 
 export function Watchlist() {
   const { quotes, loading, error, lastUpdated } = useBatchMarketData(watchlistSymbols, {
-    refreshInterval: 30000,
+    refreshInterval: 15000, // Refresh every 15 seconds
     autoRefresh: true,
   })
 
@@ -21,7 +22,7 @@ export function Watchlist() {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-32">
-            <div className="text-muted-foreground">Loading market data...</div>
+            <div className="text-muted-foreground">Loading live market data...</div>
           </div>
         </CardContent>
       </Card>
@@ -43,11 +44,18 @@ export function Watchlist() {
     )
   }
 
+  // Get data source from first quote
+  const dataSource = quotes.length > 0 ? quotes[0]._metadata?.source : "mock"
+  const errors = quotes.length > 0 ? quotes[0]._metadata?.errors : undefined
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          Watchlist
+          <div className="flex items-center gap-2">
+            Watchlist
+            <DataSourceIndicator source={dataSource} lastUpdated={lastUpdated} errors={errors} />
+          </div>
           <div className="flex items-center gap-2">
             {lastUpdated && (
               <span className="text-xs text-muted-foreground">

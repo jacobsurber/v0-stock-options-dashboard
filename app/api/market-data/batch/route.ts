@@ -1,158 +1,341 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// API Keys (server-side only)
+// Get API keys from environment variables
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY
 
-// Mock data for ultimate fallback
-const mockQuotes: { [key: string]: any } = {
-  AAPL: {
-    symbol: "AAPL",
-    price: 157.82,
-    change: 2.45,
-    changePercent: 1.58,
-    volume: "45,200,000",
-    high: 158.91,
-    low: 154.82,
-    open: 155.37,
-    previousClose: 155.37,
-    lastUpdated: Date.now(),
-  },
-  TSLA: {
-    symbol: "TSLA",
-    price: 248.91,
-    change: -5.67,
-    changePercent: -2.23,
-    volume: "32,100,000",
-    high: 254.58,
-    low: 248.91,
-    open: 254.58,
-    previousClose: 254.58,
-    lastUpdated: Date.now(),
-  },
-  MSFT: {
-    symbol: "MSFT",
-    price: 342.15,
-    change: 1.23,
-    changePercent: 0.36,
-    volume: "28,900,000",
-    high: 343.42,
-    low: 341.15,
-    open: 341.92,
-    previousClose: 340.92,
-    lastUpdated: Date.now(),
-  },
-  GOOGL: {
-    symbol: "GOOGL",
-    price: 128.45,
-    change: -0.89,
-    changePercent: -0.69,
-    volume: "19,700,000",
-    high: 129.34,
-    low: 128.45,
-    open: 129.34,
-    previousClose: 129.34,
-    lastUpdated: Date.now(),
-  },
-  NVDA: {
-    symbol: "NVDA",
-    price: 495.22,
-    change: 12.34,
-    changePercent: 2.55,
-    volume: "41,800,000",
-    high: 498.45,
-    low: 482.88,
-    open: 482.88,
-    previousClose: 482.88,
-    lastUpdated: Date.now(),
-  },
-  SPY: {
-    symbol: "SPY",
-    price: 445.23,
-    change: 1.87,
-    changePercent: 0.42,
-    volume: "78,500,000",
-    high: 446.12,
-    low: 443.45,
-    open: 444.12,
-    previousClose: 443.36,
-    lastUpdated: Date.now(),
-  },
-  QQQ: {
-    symbol: "QQQ",
-    price: 378.45,
-    change: 2.34,
-    changePercent: 0.62,
-    volume: "45,200,000",
-    high: 379.12,
-    low: 376.23,
-    open: 376.89,
-    previousClose: 376.11,
-    lastUpdated: Date.now(),
-  },
+// Rate limiting tracking
+const requestCounts = new Map<string, { count: number; resetTime: number }>()
+
+function checkRateLimit(provider: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now()
+  const key = provider
+  const current = requestCounts.get(key)
+
+  if (!current || now > current.resetTime) {
+    requestCounts.set(key, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+
+  if (current.count >= maxRequests) {
+    console.warn(
+      `⚠️ Rate limit exceeded for ${provider}. Waiting until ${new Date(current.resetTime).toLocaleTimeString()}`,
+    )
+    return false
+  }
+
+  current.count++
+  return true
 }
 
-function generateMockQuote(symbol: string) {
-  const baseQuote = mockQuotes[symbol] || mockQuotes.AAPL
-  const mockPrice = baseQuote.price + (Math.random() - 0.5) * 5
-  const mockChange = (Math.random() - 0.5) * 3
+console.log("🔑 Batch API Keys Status:", {
+  polygon: POLYGON_API_KEY ? `✅ Available (${POLYGON_API_KEY.substring(0, 8)}...)` : "❌ Missing",
+  alphaVantage: ALPHA_VANTAGE_API_KEY ? `✅ Available (${ALPHA_VANTAGE_API_KEY.substring(0, 8)}...)` : "❌ Missing",
+})
 
-  return {
-    symbol: symbol.toUpperCase(),
-    price: Number(mockPrice.toFixed(2)),
-    change: Number(mockChange.toFixed(2)),
-    changePercent: Number(((mockChange / (mockPrice - mockChange)) * 100).toFixed(2)),
-    volume: baseQuote.volume,
-    high: Number((mockPrice + Math.random() * 3).toFixed(2)),
-    low: Number((mockPrice - Math.random() * 3).toFixed(2)),
-    open: Number((mockPrice + (Math.random() - 0.5) * 2).toFixed(2)),
-    previousClose: Number((mockPrice - mockChange).toFixed(2)),
-    lastUpdated: Date.now(),
-    source: "mock",
+async function fetchBatchFromPolygon(symbols: string[]) {
+  if (!POLYGON_API_KEY) {
+    throw new Error("Polygon API key not configured")
+  }
+
+  // Check rate limit - Polygon free tier: 5 requests per minute
+  if (!checkRateLimit("polygon", 4, 60000)) {
+    throw new Error("Polygon rate limit exceeded - switching to Alpha Vantage")
+  }
+
+  console.log(`🔍 Fetching batch data for ${symbols.join(", ")} from Polygon.io...`)
+
+  try {
+    // Limit to first 3 symbols to avoid rate limits
+    const limitedSymbols = symbols.slice(0, 3)
+    console.log(`⚡ Rate limiting: fetching only ${limitedSymbols.length} symbols to avoid 429 errors`)
+
+    const results = []
+
+    // Fetch symbols one by one with delays
+    for (let i = 0; i < limitedSymbols.length; i++) {
+      const symbol = limitedSymbols[i]
+
+      try {
+        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apikey=${POLYGON_API_KEY}`
+        console.log(`📡 Polygon URL for ${symbol}: ${url.replace(POLYGON_API_KEY, "***API_KEY***")}`)
+
+        const response = await fetch(url, {
+          headers: {
+            "User-Agent": "Options-Trading-Dashboard/1.0",
+          },
+        })
+
+        if (response.status === 429) {
+          console.warn(`⚠️ Polygon rate limit hit for ${symbol} - stopping batch`)
+          throw new Error("Polygon rate limit exceeded")
+        }
+
+        if (!response.ok) {
+          throw new Error(`Polygon API HTTP ${response.status} for ${symbol}`)
+        }
+
+        const data = await response.json()
+
+        if (data.status !== "OK" || !data.results || data.results.length === 0) {
+          console.warn(`⚠️ No Polygon data for ${symbol}`)
+          continue
+        }
+
+        const result = data.results[0]
+        const price = result.c
+        const open = result.o
+        const change = price - open
+        const changePercent = (change / open) * 100
+
+        results.push({
+          symbol: symbol.toUpperCase(),
+          price: Number(price.toFixed(2)),
+          change: Number(change.toFixed(2)),
+          changePercent: Number(changePercent.toFixed(2)),
+          volume: result.v?.toLocaleString() || "0",
+          high: Number((result.h || 0).toFixed(2)),
+          low: Number((result.l || 0).toFixed(2)),
+          open: Number((result.o || 0).toFixed(2)),
+          previousClose: Number((result.c || 0).toFixed(2)),
+          lastUpdated: result.t || Date.now(),
+        })
+
+        // Add delay between requests to avoid rate limiting
+        if (i < limitedSymbols.length - 1) {
+          console.log(`⏱️ Waiting 15 seconds before next Polygon request...`)
+          await new Promise((resolve) => setTimeout(resolve, 15000))
+        }
+      } catch (error) {
+        console.warn(`⚠️ Polygon failed for ${symbol}:`, error.message)
+        if (error.message.includes("rate limit")) {
+          throw error // Stop trying if we hit rate limit
+        }
+      }
+    }
+
+    if (results.length === 0) {
+      throw new Error("No successful Polygon results")
+    }
+
+    console.log(`✅ Polygon batch success: ${results.length}/${limitedSymbols.length} symbols`)
+    return results
+  } catch (error) {
+    console.error(`❌ Polygon batch error:`, error)
+    throw error
   }
 }
 
-async function fetchQuoteWithFallback(symbol: string): Promise<any> {
-  // For now, just return mock data to avoid API issues
-  // This ensures the dashboard always works
-  return generateMockQuote(symbol)
+async function fetchBatchFromAlphaVantage(symbols: string[]) {
+  if (!ALPHA_VANTAGE_API_KEY) {
+    throw new Error("Alpha Vantage API key not configured")
+  }
+
+  // Check rate limit - Alpha Vantage free tier: 25 requests per day, 5 per minute
+  if (!checkRateLimit("alphavantage", 4, 60000)) {
+    throw new Error("Alpha Vantage rate limit exceeded")
+  }
+
+  console.log(`🔍 Fetching batch data for ${symbols.join(", ")} from Alpha Vantage...`)
+
+  try {
+    const results = []
+    // Limit to 3 symbols to avoid rate limits
+    const limitedSymbols = symbols.slice(0, 3)
+
+    for (let i = 0; i < limitedSymbols.length; i++) {
+      const symbol = limitedSymbols[i]
+
+      try {
+        const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+        console.log(`📡 Alpha Vantage URL for ${symbol}: ${url.replace(ALPHA_VANTAGE_API_KEY, "***API_KEY***")}`)
+
+        const response = await fetch(url, {
+          headers: {
+            "User-Agent": "Options-Trading-Dashboard/1.0",
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Alpha Vantage API HTTP ${response.status} for ${symbol}`)
+        }
+
+        const data = await response.json()
+
+        if (data["Error Message"] || data["Note"] || data["Information"]) {
+          const errorMsg = data["Error Message"] || data["Note"] || data["Information"]
+          console.warn(`⚠️ Alpha Vantage error for ${symbol}: ${errorMsg}`)
+
+          if (errorMsg.includes("rate limit") || errorMsg.includes("frequency")) {
+            throw new Error("Alpha Vantage rate limit exceeded")
+          }
+          continue
+        }
+
+        const quote = data["Global Quote"]
+        if (!quote || Object.keys(quote).length === 0) {
+          console.warn(`⚠️ No Alpha Vantage data for ${symbol}`)
+          continue
+        }
+
+        results.push({
+          symbol: quote["01. symbol"] || symbol.toUpperCase(),
+          price: Number.parseFloat(quote["05. price"] || "0"),
+          change: Number.parseFloat(quote["09. change"] || "0"),
+          changePercent: Number.parseFloat(quote["10. change percent"]?.replace("%", "") || "0"),
+          volume: quote["06. volume"] || "0",
+          high: Number.parseFloat(quote["03. high"] || "0"),
+          low: Number.parseFloat(quote["04. low"] || "0"),
+          open: Number.parseFloat(quote["02. open"] || "0"),
+          previousClose: Number.parseFloat(quote["08. previous close"] || "0"),
+          lastUpdated: Date.now(),
+        })
+
+        // Add delay between requests
+        if (i < limitedSymbols.length - 1) {
+          console.log(`⏱️ Waiting 15 seconds before next Alpha Vantage request...`)
+          await new Promise((resolve) => setTimeout(resolve, 15000))
+        }
+      } catch (error) {
+        console.warn(`⚠️ Alpha Vantage failed for ${symbol}:`, error.message)
+        if (error.message.includes("rate limit")) {
+          throw error
+        }
+      }
+    }
+
+    if (results.length === 0) {
+      throw new Error("No successful Alpha Vantage results")
+    }
+
+    console.log(`✅ Alpha Vantage batch success: ${results.length}/${limitedSymbols.length} symbols`)
+    return results
+  } catch (error) {
+    console.error(`❌ Alpha Vantage batch error:`, error)
+    throw error
+  }
+}
+
+function generateMockBatch(symbols: string[]) {
+  const mockData = {
+    AAPL: { base: 175, vol: "45M", change: 2.45 },
+    TSLA: { base: 250, vol: "32M", change: -5.67 },
+    SPY: { base: 445, vol: "78M", change: 1.87 },
+    QQQ: { base: 378, vol: "45M", change: 2.34 },
+    NVDA: { base: 495, vol: "41M", change: 12.34 },
+    MSFT: { base: 415, vol: "22M", change: 1.23 },
+    GOOGL: { base: 128, vol: "19M", change: -0.89 },
+  }
+
+  return symbols.map((symbol) => {
+    const mock = mockData[symbol.toUpperCase()] || { base: 100, vol: "10M", change: 0 }
+
+    // Add some realistic variation but keep it stable
+    const priceVariation = (Math.random() - 0.5) * 2 // +/- $1
+    const price = mock.base + priceVariation
+    const change = mock.change + (Math.random() - 0.5) * 1 // Small variation in change
+    const changePercent = (change / (price - change)) * 100
+
+    return {
+      symbol: symbol.toUpperCase(),
+      price: Number(price.toFixed(2)),
+      change: Number(change.toFixed(2)),
+      changePercent: Number(changePercent.toFixed(2)),
+      volume: mock.vol,
+      high: Number((price + Math.random() * 3).toFixed(2)),
+      low: Number((price - Math.random() * 3).toFixed(2)),
+      open: Number((price - change).toFixed(2)),
+      previousClose: Number((price - change).toFixed(2)),
+      lastUpdated: Date.now(),
+    }
+  })
 }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const symbolsParam = searchParams.get("symbols")
+    const provider = searchParams.get("provider") || "auto"
 
     if (!symbolsParam) {
       return NextResponse.json({ error: "Symbols parameter is required" }, { status: 400 })
     }
 
     const symbols = symbolsParam.split(",").map((s) => s.trim().toUpperCase())
-    console.log(`Fetching batch quotes for symbols: ${symbols.join(", ")}`)
+    console.log(`\n🚀 === Fetching Batch Quotes for ${symbols.join(", ")} (Provider: ${provider}) ===`)
 
-    const quotes = []
+    let quotes = []
+    let dataSource = "mock"
+    const errors = []
 
-    // Process symbols with mock data for reliability
-    for (const symbol of symbols) {
+    // Try Alpha Vantage FIRST to avoid Polygon rate limits
+    if (ALPHA_VANTAGE_API_KEY && (provider === "alpha-vantage" || provider === "auto")) {
       try {
-        const quote = await fetchQuoteWithFallback(symbol)
-        quotes.push(quote)
-      } catch (error) {
-        console.error(`Error fetching quote for ${symbol}:`, error)
-        // Add mock quote even if individual symbol fails
-        quotes.push(generateMockQuote(symbol))
+        quotes = await fetchBatchFromAlphaVantage(symbols)
+        dataSource = "alpha-vantage"
+      } catch (alphaError) {
+        console.warn(`⚠️ Alpha Vantage batch failed:`, alphaError.message)
+        errors.push(`Alpha Vantage: ${alphaError.message}`)
       }
     }
 
-    console.log(`Successfully returned ${quotes.length} quotes`)
-    return NextResponse.json(quotes)
+    // Try Polygon only if Alpha Vantage failed and we haven't hit rate limits
+    if (quotes.length === 0 && POLYGON_API_KEY && (provider === "polygon" || provider === "auto")) {
+      try {
+        quotes = await fetchBatchFromPolygon(symbols)
+        dataSource = "polygon"
+      } catch (polygonError) {
+        console.warn(`⚠️ Polygon batch failed:`, polygonError.message)
+        errors.push(`Polygon: ${polygonError.message}`)
+      }
+    }
+
+    // Use mock data as final fallback
+    if (quotes.length === 0) {
+      console.log(`🎭 Using mock batch data for ${symbols.join(", ")}. API Errors: ${errors.join(", ")}`)
+      quotes = generateMockBatch(symbols)
+      dataSource = "mock"
+    }
+
+    // If we only got partial results from APIs, fill in the rest with mock data
+    if (quotes.length < symbols.length && dataSource !== "mock") {
+      const missingSymbols = symbols.filter((symbol) => !quotes.find((q) => q.symbol === symbol))
+      const mockQuotes = generateMockBatch(missingSymbols)
+      quotes = [...quotes, ...mockQuotes]
+      console.log(`📝 Added mock data for missing symbols: ${missingSymbols.join(", ")}`)
+    }
+
+    // Add metadata to each quote
+    const quotesWithMetadata = quotes.map((quote) => ({
+      ...quote,
+      _metadata: {
+        source: dataSource,
+        timestamp: Date.now(),
+        provider: provider,
+        rateLimited: errors.some((e) => e.includes("rate limit")),
+      },
+    }))
+
+    console.log(`✅ === Returning ${quotes.length} quotes from ${dataSource.toUpperCase()} ===\n`)
+    return NextResponse.json(quotesWithMetadata)
   } catch (error) {
-    console.error("Batch market data API error:", error)
+    console.error("❌ Batch Market Data API Fatal Error:", error)
 
-    // Even if everything fails, return mock data for common symbols
-    const fallbackSymbols = ["AAPL", "TSLA", "SPY", "QQQ", "NVDA"]
-    const fallbackQuotes = fallbackSymbols.map((symbol) => generateMockQuote(symbol))
+    const symbolsParam = new URL(request.url).searchParams.get("symbols") || "AAPL"
+    const symbols = symbolsParam.split(",").map((s) => s.trim().toUpperCase())
+    const mockQuotes = generateMockBatch(symbols)
 
-    return NextResponse.json(fallbackQuotes)
+    return NextResponse.json(
+      mockQuotes.map((quote) => ({
+        ...quote,
+        _metadata: {
+          source: "mock",
+          timestamp: Date.now(),
+          provider: "fallback",
+          error: error.message,
+          fatal: true,
+        },
+      })),
+    )
   }
 }

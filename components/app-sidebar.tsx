@@ -1,6 +1,4 @@
 "use client"
-
-import type React from "react"
 import {
   Home,
   PieChart,
@@ -37,46 +35,40 @@ interface AppSidebarProps {
   onOpenAIAssistant?: () => void
 }
 
-const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange, onOpenAIAssistant }) => {
+export function AppSidebar({ activePage, onPageChange, onOpenAIAssistant }: AppSidebarProps) {
   const items = [
     {
       title: "Dashboard",
-      url: "#",
       icon: Home,
       isActive: activePage === "dashboard",
       onClick: () => onPageChange("dashboard"),
     },
     {
       title: "Portfolio",
-      url: "#",
       icon: PieChart,
       isActive: activePage === "portfolio",
       onClick: () => onPageChange("portfolio"),
     },
     {
       title: "Options Chain",
-      url: "#",
       icon: Link,
       isActive: activePage === "options-chain",
       onClick: () => onPageChange("options-chain"),
     },
     {
       title: "Charts",
-      url: "#",
       icon: BarChart3,
       isActive: activePage === "charts",
       onClick: () => onPageChange("charts"),
     },
     {
       title: "Watchlist",
-      url: "#",
       icon: Eye,
       isActive: activePage === "watchlist",
       onClick: () => onPageChange("watchlist"),
     },
     {
       title: "Analytics",
-      url: "#",
       icon: TrendingUp,
       isActive: activePage === "analytics",
       onClick: () => onPageChange("analytics"),
@@ -86,28 +78,24 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange, onOpe
   const tradingItems = [
     {
       title: "Calculator",
-      url: "#",
       icon: Calculator,
       isActive: activePage === "calculator",
       onClick: () => onPageChange("calculator"),
     },
     {
       title: "Paper Trading",
-      url: "#",
       icon: DollarSign,
       isActive: activePage === "paper-trading",
       onClick: () => onPageChange("paper-trading"),
     },
     {
       title: "Options Scanner",
-      url: "#",
       icon: Search,
       isActive: activePage === "scanner",
       onClick: () => onPageChange("scanner"),
     },
     {
       title: "Strategy Analyzer",
-      url: "#",
       icon: Target,
       isActive: activePage === "strategies",
       onClick: () => onPageChange("strategies"),
@@ -117,14 +105,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange, onOpe
   const intelligenceItems = [
     {
       title: "Market Intelligence",
-      url: "#",
       icon: Newspaper,
       isActive: activePage === "intelligence",
       onClick: () => onPageChange("intelligence"),
     },
     {
       title: "Advanced Alerts",
-      url: "#",
       icon: Bell,
       isActive: activePage === "alerts",
       onClick: () => onPageChange("alerts"),
@@ -134,7 +120,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange, onOpe
   const settingsItems = [
     {
       title: "Settings",
-      url: "#",
       icon: Settings,
       isActive: activePage === "settings",
       onClick: () => onPageChange("settings"),
@@ -232,5 +217,3 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange, onOpe
     </Sidebar>
   )
 }
-
-export { AppSidebar }

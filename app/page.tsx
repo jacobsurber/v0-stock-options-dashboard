@@ -2,11 +2,14 @@
 
 import { useState } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { AIAssistantDrawer } from "@/components/ai-assistant-drawer"
+import { MarketStatus } from "@/components/market-status"
 import { PortfolioOverview } from "@/components/portfolio-overview"
-import { OptionsChain } from "@/components/options-chain"
-import { Positions } from "@/components/positions"
 import { AdvancedChart } from "@/components/advanced-chart"
 import { Watchlist } from "@/components/watchlist"
+import { Positions } from "@/components/positions"
+import { OptionsChain } from "@/components/options-chain"
+import { TradeSetupPanel } from "@/components/trade-setup-panel"
 import { OptionsCalculator } from "@/components/options-calculator"
 import { PaperTrading } from "@/components/paper-trading"
 import { OptionsScanner } from "@/components/options-scanner"
@@ -19,11 +22,8 @@ import { ChartsPage } from "@/components/charts-page"
 import { WatchlistPage } from "@/components/watchlist-page"
 import { AnalyticsPage } from "@/components/analytics-page"
 import { SettingsPage } from "@/components/settings-page"
-import { AIAssistantDrawer } from "@/components/ai-assistant-drawer"
-import { TradeSetupPanel } from "@/components/trade-setup-panel"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { MarketDataProvider } from "@/components/market-data-provider"
-import { MarketStatus } from "@/components/market-status"
 import { Button } from "@/components/ui/button"
 import { Bot } from "lucide-react"
 
@@ -33,7 +33,6 @@ export default function Dashboard() {
 
   const handleSendToAI = (question: string) => {
     setIsAIAssistantOpen(true)
-    // In a real implementation, you'd pass the question to the AI Assistant
     console.log("Sending to AI:", question)
   }
 
@@ -41,7 +40,7 @@ export default function Dashboard() {
     switch (activePage) {
       case "dashboard":
         return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="space-y-6">
             <PortfolioOverview />
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">
@@ -66,80 +65,32 @@ export default function Dashboard() {
           </div>
         )
       case "portfolio":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <PortfolioPage />
-          </div>
-        )
+        return <PortfolioPage />
       case "options-chain":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <OptionsChainPage />
-          </div>
-        )
+        return <OptionsChainPage />
       case "charts":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <ChartsPage />
-          </div>
-        )
+        return <ChartsPage />
       case "watchlist":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <WatchlistPage />
-          </div>
-        )
+        return <WatchlistPage />
       case "analytics":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <AnalyticsPage />
-          </div>
-        )
+        return <AnalyticsPage />
       case "settings":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <SettingsPage />
-          </div>
-        )
+        return <SettingsPage />
       case "calculator":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <OptionsCalculator />
-          </div>
-        )
+        return <OptionsCalculator />
       case "paper-trading":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <PaperTrading />
-          </div>
-        )
+        return <PaperTrading />
       case "scanner":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <OptionsScanner />
-          </div>
-        )
+        return <OptionsScanner />
       case "alerts":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <AdvancedAlerts />
-          </div>
-        )
+        return <AdvancedAlerts />
       case "intelligence":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <MarketIntelligence />
-          </div>
-        )
+        return <MarketIntelligence />
       case "strategies":
-        return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <StrategyAnalyzer />
-          </div>
-        )
+        return <StrategyAnalyzer />
       default:
         return (
-          <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="space-y-6">
             <PortfolioOverview />
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">
@@ -226,7 +177,7 @@ export default function Dashboard() {
               <MarketStatus />
             </div>
           </header>
-          {renderPage()}
+          <div className="flex flex-1 flex-col gap-4 p-4">{renderPage()}</div>
         </SidebarInset>
 
         <AIAssistantDrawer isOpen={isAIAssistantOpen} onClose={() => setIsAIAssistantOpen(false)} />
