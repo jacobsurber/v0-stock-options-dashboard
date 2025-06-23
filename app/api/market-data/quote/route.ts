@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// Your Polygon.io API key
-const POLYGON_API_KEY = "hoqphq9tFcgd8ZqOq97FZbHblrBEFesd"
+// Your Polygon.io API key (server-side only)
+const POLYGON_API_KEY = process.env.POLYGON_API_KEY || "hoqphq9tFcgd8ZqOq97FZbHblrBEFesd"
 
 // Mock data as fallback
 const mockQuotes: { [key: string]: any } = {

@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// API Keys
-const POLYGON_API_KEY = "hoqphq9tFcgd8ZqOq97FZbHblrBEFesd"
-const ALPHA_VANTAGE_API_KEY = "17YSD7U2HWJEWTCU"
+// API Keys (server-side only)
+const POLYGON_API_KEY = process.env.POLYGON_API_KEY || "hoqphq9tFcgd8ZqOq97FZbHblrBEFesd"
+const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || "17YSD7U2HWJEWTCU"
 
 // Rate limiting for both APIs
 let polygonCallCount = 0
