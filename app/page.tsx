@@ -5,8 +5,14 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { PortfolioOverview } from "@/components/portfolio-overview"
 import { OptionsChain } from "@/components/options-chain"
 import { Positions } from "@/components/positions"
-import { PriceChart } from "@/components/price-chart"
+import { AdvancedChart } from "@/components/advanced-chart"
 import { Watchlist } from "@/components/watchlist"
+import { OptionsCalculator } from "@/components/options-calculator"
+import { PaperTrading } from "@/components/paper-trading"
+import { OptionsScanner } from "@/components/options-scanner"
+import { AdvancedAlerts } from "@/components/advanced-alerts"
+import { MarketIntelligence } from "@/components/market-intelligence"
+import { StrategyAnalyzer } from "@/components/strategy-analyzer"
 import { PortfolioPage } from "@/pages/portfolio-page"
 import { OptionsChainPage } from "@/pages/options-chain-page"
 import { ChartsPage } from "@/pages/charts-page"
@@ -27,7 +33,7 @@ export default function Dashboard() {
           <div className="flex flex-1 flex-col gap-4 p-4">
             <PortfolioOverview />
             <div className="grid gap-4 lg:grid-cols-2">
-              <PriceChart />
+              <AdvancedChart />
               <Watchlist />
             </div>
             <div className="grid gap-4 lg:grid-cols-1">
@@ -74,12 +80,48 @@ export default function Dashboard() {
             <SettingsPage />
           </div>
         )
+      case "calculator":
+        return (
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <OptionsCalculator />
+          </div>
+        )
+      case "paper-trading":
+        return (
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <PaperTrading />
+          </div>
+        )
+      case "scanner":
+        return (
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <OptionsScanner />
+          </div>
+        )
+      case "alerts":
+        return (
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <AdvancedAlerts />
+          </div>
+        )
+      case "intelligence":
+        return (
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <MarketIntelligence />
+          </div>
+        )
+      case "strategies":
+        return (
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <StrategyAnalyzer />
+          </div>
+        )
       default:
         return (
           <div className="flex flex-1 flex-col gap-4 p-4">
             <PortfolioOverview />
             <div className="grid gap-4 lg:grid-cols-2">
-              <PriceChart />
+              <AdvancedChart />
               <Watchlist />
             </div>
             <div className="grid gap-4 lg:grid-cols-1">
@@ -109,6 +151,18 @@ export default function Dashboard() {
         return "Portfolio Analytics"
       case "settings":
         return "Settings & Preferences"
+      case "calculator":
+        return "Options Calculator"
+      case "paper-trading":
+        return "Paper Trading"
+      case "scanner":
+        return "Options Scanner"
+      case "alerts":
+        return "Advanced Alerts"
+      case "intelligence":
+        return "Market Intelligence"
+      case "strategies":
+        return "Strategy Analyzer"
       default:
         return "Options Trading Dashboard"
     }
