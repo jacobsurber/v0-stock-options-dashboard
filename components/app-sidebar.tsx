@@ -15,6 +15,7 @@ import {
   Newspaper,
   Bell,
   Settings,
+  Bot,
 } from "lucide-react"
 
 import {
@@ -33,9 +34,10 @@ import {
 interface AppSidebarProps {
   activePage: string
   onPageChange: (page: string) => void
+  onOpenAIAssistant?: () => void
 }
 
-const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange }) => {
+const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange, onOpenAIAssistant }) => {
   const items = [
     {
       title: "Dashboard",
@@ -187,6 +189,23 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ activePage, onPageChange }) => 
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>AI Assistant</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={onOpenAIAssistant}
+                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                >
+                  <Bot />
+                  <span>Open AI Assistant</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
