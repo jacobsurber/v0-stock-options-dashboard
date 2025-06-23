@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// Your Polygon.io API key (server-side only)
-const POLYGON_API_KEY = process.env.POLYGON_API_KEY || "hoqphq9tFcgd8ZqOq97FZbHblrBEFesd"
+// Get API keys from environment variables
+const POLYGON_API_KEY = process.env.POLYGON_API_KEY
+const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY
 
 // Mock data as fallback
 const mockQuotes: { [key: string]: any } = {
@@ -43,16 +44,83 @@ const mockQuotes: { [key: string]: any } = {
     previousClose: 443.36,
     lastUpdated: Date.now(),
   },
+  NVDA: {
+    symbol: "NVDA",
+    price: 875.28,
+    change: 12.45,
+    changePercent: 1.44,
+    volume: "28,300,000",
+    high: 882.5,
+    low: 865.12,
+    open: 870.25,
+    previousClose: 862.83,
+    marketCap: 2150000000000,
+    lastUpdated: Date.now(),
+  },
+  MSFT: {
+    symbol: "MSFT",
+    price: 415.26,
+    change: 3.21,
+    changePercent: 0.78,
+    volume: "22,100,000",
+    high: 418.45,
+    low: 412.33,
+    open: 413.12,
+    previousClose: 412.05,
+    marketCap: 3080000000000,
+    lastUpdated: Date.now(),
+  },
+}
+
+function generateMockQuote(symbol: string) {
+  // Use existing mock data if available, otherwise generate new
+  const existingMock = mockQuotes[symbol.toUpperCase()]
+  if (existingMock) {
+    // Add some small random variation to make it feel live
+    const variation = (Math.random() - 0.5) * 2 // +/- $1
+    const newPrice = existingMock.price + variation
+    const change = newPrice - existingMock.previousClose
+    const changePercent = (change / existingMock.previousClose) * 100
+
+    return {
+      ...existingMock,
+      price: Number.parseFloat(newPrice.toFixed(2)),
+      change: Number.parseFloat(change.toFixed(2)),
+      changePercent: Number.parseFloat(changePercent.toFixed(2)),
+      lastUpdated: Date.now(),
+    }
+  }
+
+  // Generate new mock data for unknown symbols
+  const basePrice = 100 + Math.random() * 200
+  const change = (Math.random() - 0.5) * 10
+  const changePercent = (change / basePrice) * 100
+
+  return {
+    symbol: symbol.toUpperCase(),
+    price: Number.parseFloat(basePrice.toFixed(2)),
+    change: Number.parseFloat(change.toFixed(2)),
+    changePercent: Number.parseFloat(changePercent.toFixed(2)),
+    volume: Math.floor(Math.random() * 10000000).toLocaleString(),
+    high: Number.parseFloat((basePrice + Math.random() * 10).toFixed(2)),
+    low: Number.parseFloat((basePrice - Math.random() * 10).toFixed(2)),
+    open: Number.parseFloat((basePrice + (Math.random() - 0.5) * 5).toFixed(2)),
+    previousClose: Number.parseFloat((basePrice - change).toFixed(2)),
+    marketCap: Math.floor(Math.random() * 1000000000000),
+    lastUpdated: Date.now(),
+  }
 }
 
 async function fetchFromPolygon(symbol: string) {
+  if (!POLYGON_API_KEY) {
+    throw new Error("Polygon API key not configured")
+  }
+
   try {
-    // Use the aggregates endpoint for more reliable data
     const today = new Date()
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    // Format dates as YYYY-MM-DD
     const todayStr = today.toISOString().split("T")[0]
     const yesterdayStr = yesterday.toISOString().split("T")[0]
 
@@ -61,33 +129,19 @@ async function fetchFromPolygon(symbol: string) {
     )
 
     if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error("Invalid Polygon.io API key. Please check your API key.")
-      }
-      if (response.status === 403) {
-        throw new Error("Polygon.io API access denied. Please check your subscription.")
-      }
-      if (response.status === 429) {
-        throw new Error("Polygon.io rate limit exceeded. Please wait before making more requests.")
-      }
-      throw new Error(`Polygon.io API error: ${response.status} ${response.statusText}`)
+      throw new Error(`Polygon API HTTP ${response.status}`)
     }
 
     const data = await response.json()
 
-    if (data.status !== "OK") {
-      throw new Error(`Polygon.io API error: ${data.error || "Unknown error"}`)
+    if (data.status !== "OK" || !data.results || data.results.length === 0) {
+      throw new Error("No Polygon data available")
     }
 
-    if (!data.results || data.results.length === 0) {
-      throw new Error(`No data available for symbol ${symbol} from Polygon.io`)
-    }
-
-    // Get the most recent data point
     const latest = data.results[0]
     const previous = data.results[1] || latest
 
-    const currentPrice = latest.c // close price
+    const currentPrice = latest.c
     const previousClose = previous.c
     const change = currentPrice - previousClose
     const changePercent = (change / previousClose) * 100
@@ -105,7 +159,48 @@ async function fetchFromPolygon(symbol: string) {
       lastUpdated: latest.t || Date.now(),
     }
   } catch (error) {
-    console.error(`Polygon API error for ${symbol}:`, error)
+    throw error
+  }
+}
+
+async function fetchFromAlphaVantage(symbol: string) {
+  if (!ALPHA_VANTAGE_API_KEY) {
+    throw new Error("Alpha Vantage API key not configured")
+  }
+
+  try {
+    const response = await fetch(
+      `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`,
+    )
+
+    if (!response.ok) {
+      throw new Error(`Alpha Vantage API HTTP ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data["Error Message"] || data["Note"]) {
+      throw new Error(data["Error Message"] || data["Note"] || "Alpha Vantage API error")
+    }
+
+    const quote = data["Global Quote"]
+    if (!quote) {
+      throw new Error("No Alpha Vantage data available")
+    }
+
+    return {
+      symbol: quote["01. symbol"] || symbol.toUpperCase(),
+      price: Number.parseFloat(quote["05. price"] || "0"),
+      change: Number.parseFloat(quote["09. change"] || "0"),
+      changePercent: Number.parseFloat(quote["10. change percent"]?.replace("%", "") || "0"),
+      volume: quote["06. volume"] || "0",
+      high: Number.parseFloat(quote["03. high"] || "0"),
+      low: Number.parseFloat(quote["04. low"] || "0"),
+      open: Number.parseFloat(quote["02. open"] || "0"),
+      previousClose: Number.parseFloat(quote["08. previous close"] || "0"),
+      lastUpdated: Date.now(),
+    }
+  } catch (error) {
     throw error
   }
 }
@@ -114,63 +209,93 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const symbol = searchParams.get("symbol")
-    const provider = searchParams.get("provider") || "polygon"
+    const provider = searchParams.get("provider") || "auto"
 
     if (!symbol) {
       return NextResponse.json({ error: "Symbol parameter is required" }, { status: 400 })
     }
 
+    console.log(`Fetching quote for ${symbol} with provider: ${provider}`)
+
     let quote
+    let dataSource = "mock"
 
+    // Always try to get data, with fallback to mock
     try {
-      if (provider === "polygon") {
-        quote = await fetchFromPolygon(symbol)
-      } else {
-        // Use mock data for other providers or as fallback
-        quote = mockQuotes[symbol.toUpperCase()] || {
-          ...mockQuotes.AAPL,
-          symbol: symbol.toUpperCase(),
-          price: 100 + Math.random() * 50,
-          change: (Math.random() - 0.5) * 10,
-          changePercent: (Math.random() - 0.5) * 5,
+      // Try Polygon first (if provider is polygon or auto)
+      if ((provider === "polygon" || provider === "auto") && POLYGON_API_KEY) {
+        try {
+          quote = await fetchFromPolygon(symbol)
+          dataSource = "polygon"
+          console.log(`Successfully fetched ${symbol} from Polygon`)
+        } catch (polygonError) {
+          console.warn(`Polygon failed for ${symbol}:`, polygonError.message)
+
+          // Try Alpha Vantage as fallback
+          if (provider === "auto" && ALPHA_VANTAGE_API_KEY) {
+            try {
+              quote = await fetchFromAlphaVantage(symbol)
+              dataSource = "alpha-vantage"
+              console.log(`Successfully fetched ${symbol} from Alpha Vantage`)
+            } catch (alphaError) {
+              console.warn(`Alpha Vantage failed for ${symbol}:`, alphaError.message)
+              // Will fall through to mock data
+            }
+          }
         }
-
-        // Add some randomness to mock data
-        quote = {
-          ...quote,
-          price: quote.price + (Math.random() - 0.5) * 2,
-          change: quote.change + (Math.random() - 0.5) * 0.5,
-          lastUpdated: Date.now(),
+      }
+      // Try Alpha Vantage first (if provider is alpha-vantage)
+      else if (provider === "alpha-vantage" && ALPHA_VANTAGE_API_KEY) {
+        try {
+          quote = await fetchFromAlphaVantage(symbol)
+          dataSource = "alpha-vantage"
+          console.log(`Successfully fetched ${symbol} from Alpha Vantage`)
+        } catch (alphaError) {
+          console.warn(`Alpha Vantage failed for ${symbol}:`, alphaError.message)
+          // Will fall through to mock data
         }
-        quote.changePercent = (quote.change / (quote.price - quote.change)) * 100
       }
 
-      return NextResponse.json(quote)
-    } catch (apiError) {
-      console.warn(`API error for ${provider}, falling back to mock data:`, apiError)
-
-      // Fallback to mock data
-      quote = mockQuotes[symbol.toUpperCase()] || {
-        ...mockQuotes.AAPL,
-        symbol: symbol.toUpperCase(),
-        price: 100 + Math.random() * 50,
-        change: (Math.random() - 0.5) * 10,
-        changePercent: (Math.random() - 0.5) * 5,
+      // If no quote yet, use mock data
+      if (!quote) {
+        quote = generateMockQuote(symbol)
+        dataSource = "mock"
+        console.log(`Using mock data for ${symbol}`)
       }
-
-      // Add some randomness to mock data
-      quote = {
-        ...quote,
-        price: quote.price + (Math.random() - 0.5) * 2,
-        change: quote.change + (Math.random() - 0.5) * 0.5,
-        lastUpdated: Date.now(),
-      }
-      quote.changePercent = (quote.change / (quote.price - quote.change)) * 100
-
-      return NextResponse.json(quote)
+    } catch (error) {
+      // Final fallback to mock data
+      console.error(`All providers failed for ${symbol}, using mock data:`, error)
+      quote = generateMockQuote(symbol)
+      dataSource = "mock"
     }
+
+    // Add metadata about data source
+    const response = {
+      ...quote,
+      _metadata: {
+        source: dataSource,
+        timestamp: Date.now(),
+        provider: provider,
+      },
+    }
+
+    console.log(`Returning quote for ${symbol} from ${dataSource}`)
+    return NextResponse.json(response)
   } catch (error) {
     console.error("Market data API error:", error)
-    return NextResponse.json({ error: "Failed to fetch market data" }, { status: 500 })
+
+    // Even if everything fails, return mock data instead of 500 error
+    const symbol = new URL(request.url).searchParams.get("symbol") || "UNKNOWN"
+    const mockQuote = generateMockQuote(symbol)
+
+    return NextResponse.json({
+      ...mockQuote,
+      _metadata: {
+        source: "mock",
+        timestamp: Date.now(),
+        provider: "fallback",
+        error: "API error, using mock data",
+      },
+    })
   }
 }

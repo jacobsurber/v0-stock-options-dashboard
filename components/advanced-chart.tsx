@@ -27,6 +27,9 @@ interface TechnicalIndicator {
   description: string
 }
 
+// Cache for historical data to prevent random regeneration
+const dataCache = new Map<string, ChartData[]>()
+
 export function AdvancedChart({ symbol = "AAPL" }: { symbol?: string }) {
   const [currentSymbol, setCurrentSymbol] = useState(symbol)
   const [timeframe, setTimeframe] = useState("1D")
@@ -40,9 +43,102 @@ export function AdvancedChart({ symbol = "AAPL" }: { symbol?: string }) {
 
   const { quote } = useMarketData(currentSymbol, {
     provider: "polygon",
-    refreshInterval: 15000,
+    refreshInterval: 30000, // Increased to 30 seconds to reduce random updates
     autoRefresh: true,
   })
+
+  // Generate consistent historical data based on symbol and timeframe
+  const generateConsistentHistoricalData = (symbol: string, timeframe: string, basePrice: number): ChartData[] => {
+    const cacheKey = `${symbol}-${timeframe}`
+
+    // Return cached data if available
+    if (dataCache.has(cacheKey)) {
+      return dataCache.get(cacheKey)!
+    }
+
+    const data: ChartData[] = []
+    const now = Date.now()
+    let interval = 24 * 60 * 60 * 1000 // 1 day default
+
+    // Set interval based on timeframe
+    switch (timeframe) {
+      case "1m":
+        interval = 60 * 1000
+        break
+      case "5m":
+        interval = 5 * 60 * 1000
+        break
+      case "15m":
+        interval = 15 * 60 * 1000
+        break
+      case "1H":
+        interval = 60 * 60 * 1000
+        break
+      case "4H":
+        interval = 4 * 60 * 60 * 1000
+        break
+      case "1D":
+        interval = 24 * 60 * 60 * 1000
+        break
+      case "5D":
+        interval = 24 * 60 * 60 * 1000
+        break
+      case "1M":
+        interval = 24 * 60 * 60 * 1000
+        break
+      case "3M":
+        interval = 24 * 60 * 60 * 1000
+        break
+      case "6M":
+        interval = 24 * 60 * 60 * 1000
+        break
+      case "1Y":
+        interval = 24 * 60 * 60 * 1000
+        break
+    }
+
+    // Use symbol hash as seed for consistent randomness
+    const symbolSeed = symbol.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    let currentPrice = basePrice
+
+    // Generate consistent data points
+    for (let i = 100; i >= 0; i--) {
+      const timestamp = now - i * interval
+
+      // Use deterministic "randomness" based on timestamp and symbol
+      const seed = (timestamp + symbolSeed) % 1000000
+      const random1 = ((seed * 9301 + 49297) % 233280) / 233280
+      const random2 = (((seed + 1) * 9301 + 49297) % 233280) / 233280
+      const random3 = (((seed + 2) * 9301 + 49297) % 233280) / 233280
+      const random4 = (((seed + 3) * 9301 + 49297) % 233280) / 233280
+
+      const volatility = 0.015 // 1.5% volatility
+      const trend = Math.sin((100 - i) * 0.1) * 0.005 // Slight trend component
+
+      const change = (random1 - 0.5) * volatility * currentPrice + trend * currentPrice
+      const open = currentPrice
+      const close = currentPrice + change
+      const high = Math.max(open, close) + random2 * volatility * currentPrice * 0.3
+      const low = Math.min(open, close) - random3 * volatility * currentPrice * 0.3
+      const volume = Math.floor(random4 * 500000) + 500000
+
+      data.push({
+        time: new Date(timestamp).toISOString(),
+        timestamp,
+        open: Number(open.toFixed(2)),
+        high: Number(high.toFixed(2)),
+        low: Number(low.toFixed(2)),
+        close: Number(close.toFixed(2)),
+        volume,
+      })
+
+      currentPrice = close
+    }
+
+    // Cache the generated data
+    dataCache.set(cacheKey, data)
+    return data
+  }
 
   // Fetch historical data from server
   useEffect(() => {
@@ -65,70 +161,37 @@ export function AdvancedChart({ symbol = "AAPL" }: { symbol?: string }) {
           throw new Error(result.error)
         }
 
-        // Convert API data to chart format
-        const data: ChartData[] = (result.data || []).map((item: any, index: number) => {
-          const basePrice = quote?.price || 157.82
-          const variation = (Math.random() - 0.5) * 0.02 * basePrice
-          const close = basePrice + variation
-          const open = close + (Math.random() - 0.5) * 0.01 * basePrice
-          const high = Math.max(open, close) + Math.random() * 0.005 * basePrice
-          const low = Math.min(open, close) - Math.random() * 0.005 * basePrice
-          const volume = Math.floor(Math.random() * 1000000) + 500000
-
-          return {
-            time: new Date(Date.now() - (100 - index) * 60000).toISOString(),
-            timestamp: Date.now() - (100 - index) * 60000,
-            open,
-            high,
-            low,
-            close,
-            volume,
-          }
-        })
-
-        setChartData(data)
+        // If we have real data from the API, use it
+        if (result.data && result.data.length > 0) {
+          const apiData: ChartData[] = result.data.map((item: any) => ({
+            time: new Date(item.timestamp).toISOString(),
+            timestamp: item.timestamp,
+            open: item.open,
+            high: item.high,
+            low: item.low,
+            close: item.close,
+            volume: item.volume,
+          }))
+          setChartData(apiData)
+        } else {
+          throw new Error("No API data available")
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to fetch historical data"
         setError(errorMessage)
-        console.error("Historical data fetch error:", err)
+        console.warn("Using consistent fallback data:", errorMessage)
 
-        // Generate fallback data
-        const fallbackData: ChartData[] = []
+        // Use consistent fallback data instead of random data
         const basePrice = quote?.price || 157.82
-        let currentPrice = basePrice
-
-        for (let i = 0; i < 100; i++) {
-          const volatility = 0.02
-          const change = (Math.random() - 0.5) * volatility * currentPrice
-          const open = currentPrice
-          const close = currentPrice + change
-          const high = Math.max(open, close) + Math.random() * 0.01 * currentPrice
-          const low = Math.min(open, close) - Math.random() * 0.01 * currentPrice
-          const volume = Math.floor(Math.random() * 1000000) + 500000
-
-          const timestamp = Date.now() - (100 - i) * 60000
-
-          fallbackData.push({
-            time: new Date(timestamp).toISOString(),
-            timestamp,
-            open,
-            high,
-            low,
-            close,
-            volume,
-          })
-
-          currentPrice = close
-        }
-
-        setChartData(fallbackData)
+        const consistentData = generateConsistentHistoricalData(currentSymbol, timeframe, basePrice)
+        setChartData(consistentData)
       } finally {
         setLoading(false)
       }
     }
 
     fetchHistoricalData()
-  }, [currentSymbol, timeframe, quote])
+  }, [currentSymbol, timeframe]) // Removed quote dependency to prevent constant updates
 
   // Calculate technical indicators
   useEffect(() => {

@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, TrendingUp, Volume2, Zap } from "lucide-react"
+import { Search, Volume2, Zap } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Bot, Target, TrendingDown, TrendingUp, DollarSign, AlertTriangle, BarChart3 } from "lucide-react"
 
 interface OptionsData {
   symbol: string
@@ -37,6 +39,10 @@ export function OptionsScanner() {
     minImpliedVolatility: 0,
     maxImpliedVolatility: 200,
   })
+
+  const [tradingGoal, setTradingGoal] = useState("")
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   // Mock data for demonstration
   const mockOptionsData: OptionsData[] = [
@@ -92,6 +98,23 @@ export function OptionsScanner() {
       volumeRatio: 3.2,
     },
     {
+      symbol: "NVDA",
+      strike: 580,
+      expiration: "2024-03-15",
+      type: "put",
+      bid: 12.1,
+      ask: 12.8,
+      volume: 5432,
+      openInterest: 8765,
+      impliedVolatility: 48.3,
+      delta: -0.35,
+      gamma: 0.025,
+      theta: -0.18,
+      vega: 0.38,
+      unusualActivity: false,
+      volumeRatio: 2.1,
+    },
+    {
       symbol: "SPY",
       strike: 480,
       expiration: "2024-02-02",
@@ -136,6 +159,34 @@ export function OptionsScanner() {
         })
       default:
         return filteredData
+    }
+  }
+
+  const analyzeTradeGoal = async () => {
+    if (!tradingGoal.trim()) return
+
+    setIsAnalyzing(true)
+    try {
+      const response = await fetch("/api/trading-strategy", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistant-mode": "scanner",
+        },
+        body: JSON.stringify({
+          goal: tradingGoal,
+          optionChain: filteredData,
+        }),
+      })
+
+      if (response.ok) {
+        const analysis = await response.json()
+        setAiAnalysis(analysis)
+      }
+    } catch (error) {
+      console.error("Analysis failed:", error)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -235,6 +286,159 @@ export function OptionsScanner() {
               <Search className="h-4 w-4 mr-2" />
               Run Scan
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-blue-500" />
+              AI Strategy Analyzer
+            </CardTitle>
+            <CardDescription>
+              Describe your trading goal and get AI-powered strategy recommendations based on current option chain data
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="tradingGoal">Trading Goal</Label>
+              <Textarea
+                id="tradingGoal"
+                placeholder="e.g., I want a bearish vertical spread on NVDA with limited risk and high probability..."
+                value={tradingGoal}
+                onChange={(e) => setTradingGoal(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <BarChart3 className="h-4 w-4" />
+              <span>AI will analyze {filteredData.length} available options from your current scan results</span>
+            </div>
+
+            <Button onClick={analyzeTradeGoal} disabled={!tradingGoal.trim() || isAnalyzing} className="w-full">
+              {isAnalyzing ? (
+                <>
+                  <Bot className="h-4 w-4 mr-2 animate-pulse" />
+                  Analyzing Strategy...
+                </>
+              ) : (
+                <>
+                  <Target className="h-4 w-4 mr-2" />
+                  Analyze Trading Goal
+                </>
+              )}
+            </Button>
+
+            {aiAnalysis && (
+              <div className="mt-6 p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+                <div className="flex items-center gap-2 mb-4">
+                  <Bot className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-semibold text-lg">{aiAnalysis.strategy}</h3>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-2">TRADE LEGS</h4>
+                      <div className="space-y-2">
+                        {aiAnalysis.legs?.map((leg: any, index: number) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border"
+                          >
+                            <div className="flex items-center gap-2">
+                              {leg.action === "BUY" ? (
+                                <TrendingUp className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <TrendingDown className="h-4 w-4 text-red-500" />
+                              )}
+                              <span className="font-medium">{leg.action}</span>
+                              <Badge variant={leg.type === "CALL" ? "default" : "secondary"}>{leg.type}</Badge>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">${leg.strike}</div>
+                              <div className="text-xs text-gray-500">{leg.expiration}</div>
+                              {leg.price && <div className="text-xs text-blue-600">${leg.price.toFixed(2)}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {aiAnalysis.breakeven && aiAnalysis.breakeven.length > 0 && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded border">
+                        <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-2">BREAKEVEN POINTS</h4>
+                        <div className="flex gap-2">
+                          {aiAnalysis.breakeven.map((point: number, index: number) => (
+                            <Badge key={index} variant="outline">
+                              ${point.toFixed(2)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="grid gap-3">
+                      <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded border border-red-200 dark:border-red-800">
+                        <div className="flex items-center gap-2 mb-1">
+                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          <span className="font-medium text-red-700 dark:text-red-400">Max Loss</span>
+                        </div>
+                        <div className="text-xl font-bold text-red-600">{aiAnalysis.maxLoss}</div>
+                      </div>
+
+                      <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded border border-green-200 dark:border-green-800">
+                        <div className="flex items-center gap-2 mb-1">
+                          <DollarSign className="h-4 w-4 text-green-600" />
+                          <span className="font-medium text-green-700 dark:text-green-400">Max Gain</span>
+                        </div>
+                        <div className="text-xl font-bold text-green-600">{aiAnalysis.maxGain}</div>
+                      </div>
+
+                      {aiAnalysis.riskReward && (
+                        <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded border border-purple-200 dark:border-purple-800">
+                          <div className="flex items-center gap-2 mb-1">
+                            <BarChart3 className="h-4 w-4 text-purple-600" />
+                            <span className="font-medium text-purple-700 dark:text-purple-400">Risk/Reward</span>
+                          </div>
+                          <div className="text-lg font-bold text-purple-600">{aiAnalysis.riskReward.ratio}</div>
+                          {aiAnalysis.riskReward.probability && (
+                            <div className="text-sm text-purple-500">{aiAnalysis.riskReward.probability}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
+                    <h4 className="font-medium text-blue-700 dark:text-blue-400 mb-2">Strategy Summary</h4>
+                    <p className="text-sm text-blue-600 dark:text-blue-300">{aiAnalysis.summary}</p>
+                  </div>
+
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 rounded border border-indigo-200 dark:border-indigo-800">
+                    <h4 className="font-medium text-indigo-700 dark:text-indigo-400 mb-2">Rationale</h4>
+                    <p className="text-sm text-indigo-600 dark:text-indigo-300">{aiAnalysis.rationale}</p>
+                  </div>
+                </div>
+
+                {aiAnalysis.riskWarning && (
+                  <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950/20 rounded border border-yellow-200 dark:border-yellow-800">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-yellow-700 dark:text-yellow-400">Risk Warning</h4>
+                        <p className="text-sm text-yellow-600 dark:text-yellow-300 mt-1">{aiAnalysis.riskWarning}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
